@@ -5,7 +5,7 @@ import { log } from 'mentie'
 const update_interval_ms = 1000 * 60 * 60 * 24 // 24 hours
 import { readFile } from 'fs/promises'
 const { version } = JSON.parse( await readFile( new URL( './package.json', import.meta.url ) ) )
-log.info( `Starting Sybil Network validator component version ${ version }` )
+log.info( `Starting Sybil Network validator component version ${ version } and env`, process.env )
 
 
 // Initialize the database

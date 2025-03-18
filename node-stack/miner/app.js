@@ -9,12 +9,6 @@ log.info( 'Initialising database tables' )
 await init_tables()
 log.info( 'Database tables initialised' )
 
-// Initialise database
-import { init_tables } from './modules/database.js'
-log.info( 'Initialising database tables' )
-await init_tables()
-log.info( 'Database tables initialised' )
-
 // Import express
 import { app } from './routes/server.js'
 log.info( `Setting up routes` )

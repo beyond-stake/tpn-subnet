@@ -6,8 +6,6 @@ services:
     build:
       context: ./miner
       dockerfile: Dockerfile.miner
-    env_file:
-      - ./miner/.env
     ports:
         - "3001:3001"
     volumes:
@@ -62,8 +60,6 @@ services:
     build:
       context: ./validator
       dockerfile: Dockerfile
-    env_file:
-      - ./validator/.env
     # Environment variables will be picked from .env unless overridden here
     environment:
       - LOG_LEVEL=info
