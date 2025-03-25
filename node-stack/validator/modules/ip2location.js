@@ -219,7 +219,10 @@ export async function is_data_center( ip_address ) {
     }
 
     // Check that database file exists
-    if( !fs.existsSync( database_file_location ) ) throw new Error( `Database file ${ database_file_location } does not exist` )
+    if( !fs.existsSync( database_file_location ) ) {
+        if( process.env.CI_MODE ) return 'ci.ci.ci.ci'
+        throw new Error( `Database file ${ database_file_location } does not exist` )
+    }
 
     // Check database file metadata
     const { mtimeMs } = fs.statSync( database_file_location )

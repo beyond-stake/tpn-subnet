@@ -17,6 +17,7 @@ export async function wait_for_server_up() {
     let server_up = false
     let count = 0
     const max_count = 60
+    console.log( 'Waiting for http://localhost:3001 to be up' )
     while( !server_up ) {
 
         // If max count exceeded, throw
@@ -37,15 +38,17 @@ export async function wait_for_server_up() {
     }
 
     // Try the same for localhost:3000  
+    const { PUBLIC_VALIDATOR_URL='http://localhost:3000' } = process.env
     server_up = false
     count = 0
+    console.log( `Waiting for ${ PUBLIC_VALIDATOR_URL } to be up` )
     while( !server_up ) {
 
         // If max count exceeded, throw
         if( count > max_count ) throw new Error( `Server did not start after ${ max_count } attempts` )
 
         // Fetch the server status
-        const response = await fetch( 'http://localhost:3000' ).catch( e => e )
+        const response = await fetch( PUBLIC_VALIDATOR_URL ).catch( e => e )
 
         // Check if the server is up
         server_up = response.ok

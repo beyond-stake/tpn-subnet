@@ -9,6 +9,7 @@ on:
       - "node-stack/validator/package.json"
     branches:
       - main
+      - development
 
 jobs:
   deploy:
@@ -50,7 +51,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 4. Build and push the Docker image with the new version tag (only if version changed)
+      # 4. Build and push the Docker image with the new version tag (only if version changed), add -dev for development branch
       - name: Build and push Docker image
         if: steps.version_check.outputs.deploy == 'true'
         uses: docker/build-push-action@v4
@@ -59,5 +60,5 @@ jobs:
           file: ./node-stack/validator/Dockerfile # Dockerfile location
           push: true
           tags: |
-            taofuprotocol/tpn-subnet-validator:${{ steps.version_check.outputs.version }}
-            taofuprotocol/tpn-subnet-validator:latest
+            taofuprotocol/tpn-subnet-validator:${{ steps.version_check.outputs.version }}${{ github.ref == 'refs/heads/development' && '-dev' }}
+            taofuprotocol/tpn-subnet-validator:latest${{ github.ref == 'refs/heads/development' && '-dev' }}

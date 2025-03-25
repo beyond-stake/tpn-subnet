@@ -64,14 +64,14 @@ docker run \
     -e LOG_LEVEL=info \
     -e MAXMIND_LICENSE_KEY="" \
     -e PUBLIC_VALIDATOR_URL="http://localhost" \
-    - e PUBLIC_PORT=3000 \
+    -e PUBLIC_PORT=3000 \
     -v "$(pwd)/database.sqlite:/app/database.sqlite" \
-    sybil-network:nightly
+    tpn-network:local
 ```
 
 Building docker file:
 
-```docker build -t sybil-network:nightly . --no-cache```
+```docker build -t tpn-network:local . --no-cache```
 
 ## Attributions
 

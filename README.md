@@ -109,7 +109,19 @@ The consists out of two components:
 1. A miner docker container that is managed through `docker`
 2. A miner neuron that is managed through `pm2`
 
-To start the docker container:
+To start the docker container, there are 2 steps. Creating a `.env` file and starting the container.
+
+Create a `.env` file in the `node-stack/miner` directory with the following content:
+
+```bash
+POSTGRES_PASSWORD=xxxx c# REQUIRED, may be any valid string, choose something random
+LOG_LEVEL=info # optional, this controls the log level, valid values are: info, warn, error
+POSTGRES_HOST=postgres # optional, only use if you have a remote database (not recommended)
+POSTGRES_PORT=5432 # optional, this changes the postgres port (not recommended)
+WIREGUARD_PEER_COUNT=250 # optional, this changes the amount of connections the miner offers, must be between 15 and 250
+```
+
+Then start the miner docker container:
 
 ```bash
 # NOTE: this assumes you are in the tpn-subnet directory
@@ -203,17 +215,21 @@ The validator needs to be configured with some settings and third party API keys
 
 ```bash
 # This controls the verbosity of the logs. Possible values are: info, warn, error
-LOG_LEVEL=info
+LOG_LEVEL=info # Optional
 
 # A free license key, obtained by creating an account and API key at http://maxmind.com/en/accounts/
 MAXMIND_LICENSE_KEY=xxxx
 
 # This is the public URL where the validator can be reached.
-PUBLIC_URL=http://1.2.3.4:3000
+PUBLIC_VALIDATOR_URL=http://1.2.3.4
+
+# This is 3000 by default, you should only change it if your device is behind a firewall or reverse proxy.
+# Miners MUST be able to call your validator at this port. If they cannot, your validator is NOT valid. Test this by running `curl $PUBLIC_VALIDATOR_URL:$PUBLIC_PORT`
+PUBLIC_PORT=3000
 
 # The free ip2location lite API key, obtained by creating an account at https://lite.ip2location.com/login
 IP2LOCATION_DOWNLOAD_TOKEN=xxxx
-POSTGRES_PASSWORD=xxxx # Choose something random, it does not matter what.
+POSTGRES_PASSWORD=xxxx # May be any valid string, choose something random, it does not matter what.
 ```
 
 ### Step 3: Start the validator

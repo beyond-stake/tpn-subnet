@@ -9,6 +9,7 @@ on:
       - "node-stack/miner/package.json"
     branches:
       - main
+      - development
 
 jobs:
   deploy:
@@ -16,13 +17,13 @@ jobs:
 
     steps:
       
-      # 1. Checkout with enough history to compare previous commit
+      # Checkout with enough history to compare previous commit
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 2  # Need previous commit for diff
 
-      # 2. Check if the version property in package.json changed
+      # Check if the version property in package.json changed
       - name: Check version change
         id: version_check
         run: |
@@ -42,7 +43,7 @@ jobs:
           fi
         shell: bash
 
-      # 3. Log in to Docker Hub
+      # Log in to Docker Hub
       - name: Log in to Docker Hub
         if: steps.version_check.outputs.deploy == 'true'
         uses: docker/login-action@v2
@@ -50,14 +51,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 4. Build and push the Docker image with the new version tag (only if version changed)
+      # Build and push the Docker image with the new version tag (only if version changed), add -dev for development branch
       - name: Build and push Docker image
         if: steps.version_check.outputs.deploy == 'true'
         uses: docker/build-push-action@v4
         with:
-          context: ./node-stack/miner       # Build context location
-          file: ./node-stack/miner/Dockerfile # Dockerfile location
+          context: ./node-stack/miner
+          file: ./node-stack/miner/Dockerfile.miner
           push: true
           tags: |
-            taofuprotocol/tpn-subnet-miner:${{ steps.version_check.outputs.version }}
-            taofuprotocol/tpn-subnet-miner:latest
+            taofuprotocol/tpn-subnet-miner:${{ steps.version_check.outputs.version }}${{ github.ref == 'refs/heads/development' && '-dev' }}
+            taofuprotocol/tpn-subnet-miner:latest${{ github.ref == 'refs/heads/development' && '-dev' }}
+

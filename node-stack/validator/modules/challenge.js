@@ -42,7 +42,7 @@ export async function solve_challenge( { challenge, response } ) {
 
     // If the response is wrong, return false
     if( solution.response != response ) {
-        log.info( `Challenge ${ challenge } submitted faulty response: ${ response }` )
+        log.info( `Challenge ${ challenge } submitted faulty response: ${ response }. Expected: ${ solution.response }` )
         return { correct: false }
     }
 

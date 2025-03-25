@@ -11,12 +11,20 @@ COPY package*.json ./
 RUN npm i -g npm
 RUN npm ci --omit=dev
 
+# Run available security updates
+RUN apt update && apt upgrade -y
+
 # Install curl for the healthcheck
-RUN apt update && apt install -y curl
+RUN apt update && apt install -y curl docker.io
+
+# Cachebust
+ARG CACHEBUST=1
+RUN echo "CACHEBUST=$CACHEBUST"
 
 # Copy application code
 COPY app.js ./
 COPY routes ./routes
+COPY modules ./modules
 
 # Expose the port the app runs on
 EXPOSE 3001
@@ -25,4 +33,4 @@ EXPOSE 3001
 CMD ["node", "app.js"]
 
 # Healthcheck call to /score, expect 200
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD curl -f http://localhost:3001/challenge || exit 1
+HEALTHCHECK --interval=10s --timeout=10s --start-period=60s --retries=3 CMD curl -f http://localhost:3001/challenge || exit 1

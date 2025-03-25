@@ -1,0 +1,13 @@
+# Use Nodejs image base
+FROM  lscr.io/linuxserver/wireguard:latest
+
+# Modify the startup script so it always regenerates the client files that are missing
+# by appending "generate_confs" to the /etc/s6-overlay/s6-rc.d/init-wireguard-confs/run script
+RUN echo "echo 'Force-generating missing wireguard config files'" >> /etc/s6-overlay/s6-rc.d/init-wireguard-confs/run
+RUN echo "generate_confs" >> /etc/s6-overlay/s6-rc.d/init-wireguard-confs/run
+
+# Disable qrencode lines by commenting them out
+RUN sed -i 's/^qrencode/#qrencode/' /etc/s6-overlay/s6-rc.d/init-wireguard-confs/run
+
+# Add a healthcheck
+HEALTHCHECK --interval=2s --timeout=2s --start-period=120s --retries=5 CMD ip link show wg0

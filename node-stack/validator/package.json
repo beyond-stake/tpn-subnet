@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest --silent=false watch",
+    "test:ci": "vitest run --silent=false",
     "lint": "eslint --fix src",
     "dev": "nodemon app.js"
   },
@@ -17,7 +18,7 @@
     "geoip-lite": "^1.4.10",
     "ip2location-nodejs": "^9.6.3",
     "maxmind": "^4.3.24",
-    "mentie": "^0.3.1",
+    "mentie": "^0.3.3",
     "pg": "^8.13.3",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",

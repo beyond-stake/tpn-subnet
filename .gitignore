@@ -167,3 +167,4 @@ testing/
 
 wandb/
 .DS_Store
+wireguard

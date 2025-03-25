@@ -46,11 +46,14 @@ describe( 'GET /challenge/new', () => {
         await wait_for_server_up()
 
         // Replace the challenge host with localhost
-        challenge_url = challenge_url.replace( 'validator', 'localhost' )
+        const { CI_VALIDATOR_HOST='localhost' } = process.env
+        challenge_url = challenge_url.replace( 'validator', CI_VALIDATOR_HOST )
 
         // Make GET request to get challenge endpoint
         console.log( `Getting challenge at:`, challenge_url )
-        const { response } = await fetch( challenge_url ).then( res => res.json() )
+        const res = await fetch( challenge_url ).then( res => res.json() )
+        console.log( `Challenge data:`, res )
+        const { response } = res
 
         // Expect the response to be a uuidv4
         expect( response ).toMatch( /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/ )

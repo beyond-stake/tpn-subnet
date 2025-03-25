@@ -115,7 +115,7 @@ dist
 
 # Serverless directories
 .serverless/
- 
+
 # FuseBox cache
 .fusebox/
 
@@ -143,3 +143,4 @@ database.sqlite
 *.BIN
 *.zip
 *.sqlite
+wireguard/

@@ -2,18 +2,86 @@ services:
   miner:
     container_name: miner
     restart: unless-stopped
+    # Comment this image line if you want to build from local source
     image: taofuprotocol/tpn-subnet-miner:latest
+    # Suggested command: docker compose -f miner.docker-compose.yml build --build-arg CACHEBUST=$(date +%s) && docker compose -f miner.docker-compose.yml up; docker compose -f miner.docker-compose.yml down -v
+    build:
+      context: .
+      dockerfile: Dockerfile.miner
+    env_file:
+      - .env
     ports:
         - "3001:3001"
+    volumes:
+      - ./wireguard:/app/wireguard
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - wireguard
     environment:
         LOG_LEVEL: info
+    networks:
+      - tpn_network
+
+  postgres:
+    container_name: postgres
+    image: postgres
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_PASSWORD
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    shm_size: 128mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tpn_network
+
+  wireguard:
+    # image: lscr.io/linuxserver/wireguard:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.wireguard
+    container_name: wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - SERVERPORT=51820
+      - PEERS=${WIREGUARD_PEER_COUNT:-250}
+      - LOG_CONFS=false
+    volumes:
+      - ./wireguard:/config
+    ports:
+      - 51820:51820/udp
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
 
   watchtower:
-    container_name: watchtower
+    container_name: tpn_miner_watchtower
     image: containrrr/watchtower
+    depends_on:
+      - wireguard
+      - miner
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_POLL_INTERVAL=3600
       - WATCHTOWER_TIMEOUT=60s
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+
+volumes:
+  postgres_data:
+
+networks:
+  tpn_network:
+    driver: bridge
