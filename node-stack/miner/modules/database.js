@@ -34,6 +34,32 @@ export async function init_tables() {
 
 }
 
+async function cleanup_expired_wireguard_configs() {
+
+    // Find all expired rows
+    log.info( 'Checking for expired rows' )
+    const expired_rows = await pool.query( `SELECT id FROM miner_wireguard_configs WHERE expires_at < $1`, [ Date.now() ] )
+    log.info( `Expired rows: ${ expired_rows.rows.map( row => row.id ).join( ', ' ) }` )
+    
+    // Delete all expired rows and their associated configs
+    const expired_ids = expired_rows.rows.map( row => row.id )
+    const { WIREGUARD_PEER_COUNT=250 } = process.env
+    log.info( `Expired ids: ${ expired_ids.length } of ${ WIREGUARD_PEER_COUNT }` )
+    if( expired_ids.length > 0 ) {
+
+        log.info( `${ expired_ids.length } WireGuard configs have expired, deleting them and restarting server` )
+
+        // Delete and restart the wireguard server
+        await delete_wireguard_configs( expired_ids )
+        await restart_wg_container()
+
+        // Delete the expired rows from the database
+        await pool.query( `DELETE FROM miner_wireguard_configs WHERE id = ANY( $1::int[] )`, [ expired_ids ] )
+
+    }
+
+}
+
 /**
  * Registers a WireGuard lease in the database.
  *
@@ -48,7 +74,7 @@ export async function init_tables() {
  */
 export async function register_wireguard_lease( { start_id=1, end_id=250, expires_at } ) {
 
-    log.info( `Registering WireGuard lease between ${ start_id } and ${ end_id }, expires at ${ expires_at }` )
+    log.info( `Registering WireGuard lease between ${ start_id } and ${ end_id }, expires at ${ expires_at }`, new Date( expires_at ) )
 
     // Mitigate race contitions
     let working = cache( `register_wireguard_lease_working` )
@@ -58,36 +84,27 @@ export async function register_wireguard_lease( { start_id=1, end_id=250, expire
         working = cache( `register_wireguard_lease_working` )
         log.info( `Working: ${ working }` )
     }
+    log.info( `Starting register_wireguard_lease` )
     cache( `register_wireguard_lease_working`, true, 10_000 )
-
-    // Find all expired rows
-    log.info( 'Checking for expired rows' )
-    const expired_rows = await pool.query( `SELECT id FROM miner_wireguard_configs WHERE expires_at < $1`, [ Date.now() ] )
-    log.info( `Expired rows: ${ expired_rows.rows.map( row => row.id ).join( ', ' ) }` )
-
-    // Delete all expired rows and their associated configs
-    const expired_ids = expired_rows.rows.map( row => row.id )
-    const { WIREGUARD_PEER_COUNT=250 } = process.env
-    if( expired_ids.length == WIREGUARD_PEER_COUNT ) {
-
-        log.info( `All ${ WIREGUARD_PEER_COUNT } WireGuard configs have expired, deleting all and restarting server` )
-
-        // Delete and restart the wireguard server
-        await delete_wireguard_configs( expired_ids )
-        await restart_wg_container()
-
-        // Delete the expired rows from the database
-        await pool.query( `DELETE FROM miner_wireguard_configs WHERE id = ANY( $1::int[] )`, [ expired_ids ] )
-
-    }
 
     // Check if there is an id that does not yet exist between the start and end id
     log.info( `Checking for available id between ${ start_id } and ${ end_id }` )
     let id = start_id
+    let cleaned_up = false
     while( id <= end_id ) {
+
+        // Check for a non-existing id row (meaning unassigned and free)
         const existing_id = await pool.query( `SELECT id FROM miner_wireguard_configs WHERE id = $1`, [ id ] )
         if( !existing_id.rows.length ) break
         id++
+
+        // If we have reached the end of the range and did not clean up yet, clean up and start over
+        if( id > end_id && !cleaned_up ) {
+            await cleanup_expired_wireguard_configs()
+            cleaned_up = true
+            id = start_id
+        }
+
     }
     let next_available_id = id > end_id ? null : id
     log.info( `Next available empty id: ${ next_available_id }` )
@@ -97,10 +114,11 @@ export async function register_wireguard_lease( { start_id=1, end_id=250, expire
 
         // Find the expiry timestamp of the row that expires soonest
         const soonest_expiry = await pool.query( `SELECT expires_at FROM miner_wireguard_configs ORDER BY expires_at ASC LIMIT 1` )
-        const { expires_at=0 } = soonest_expiry.rows[0] || {}
-        const soonest_expiry_s = ( expires_at - Date.now() ) / 1000
+        const { expires_at: soonest_expiry_at=0 } = soonest_expiry.rows[0] || {}
+        const soonest_expiry_s = ( soonest_expiry_at - Date.now() ) / 1000
 
         log.warn( `No available WireGuard config slots found between ${ start_id } and ${ end_id }, soonest expiry in ${ Math.floor( soonest_expiry_s / 60 ) } minutes (${ soonest_expiry_s }s)` )
+        cache( `register_wireguard_lease_working`, false )
         throw new Error( `No available WireGuard config slots found between ${ start_id } and ${ end_id }` )
     }
 
@@ -113,6 +131,7 @@ export async function register_wireguard_lease( { start_id=1, end_id=250, expire
     `, [ next_available_id, expires_at ] )
 
     // Clear the working cache
+    log.info( `Finished register_wireguard_lease` )
     cache( `register_wireguard_lease_working`, false )
 
     // Wait for wireguard server to be ready for this config

@@ -1,10 +1,10 @@
 {
   "name": "tpn-subnet-miner",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "main": "app.js",
   "type": "module",
   "scripts": {
-    "test": "vitest --silent=false watch",
+    "test": "CI_MODE=true vitest --silent=false watch",
     "test:ci": "vitest run --silent=false",
     "lint": "eslint --fix src",
     "dev": "nodemon app.js"

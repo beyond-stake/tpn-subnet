@@ -118,6 +118,7 @@ export async function restart_wg_container() {
 
     // Restart the wireguard container, note that this relies on the container being named "wireguard"
     try {
+        log.info( `Restarting wireguard container` )
         const result = await new Promise( ( resolve, reject ) => {
             exec( `docker restart wireguard`, ( error, stdout, stderr ) => {
                 if( error ) return reject( error )

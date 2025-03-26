@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { log, make_retryable } from 'mentie'
 import { get_valid_wireguard_config } from '../modules/wireguard.js'
+import { request_is_local } from '../modules/network.js'
 export const router = Router()
 const { CI_MODE } = process.env
 
@@ -13,6 +14,10 @@ router.get( '/new', async ( req, res ) => {
         // Get properties from query string
         const { geo, lease_minutes } = req.query
         log.info( `Received request for new wireguard config with geo ${ geo } and lease_minutes ${ lease_minutes }` )
+
+        // Log out local status
+        const is_local = request_is_local( req )
+        log.info( `Request is local: ${ is_local }` )
 
         // Check if properties are valid
         if( !geo || !lease_minutes ) return res.status( 400 ).json( { error: 'Missing geo or lease_minutes' } )
@@ -31,7 +36,9 @@ router.get( '/new', async ( req, res ) => {
 
     try {
 
-        const retryable_handler = await make_retryable( handle_route, { retry_times: 2, cooldown_in_s: 2, cooldown_entropy: true } )
+        const { CI_MODE } = process.env
+        const retry_times = CI_MODE ? 1 : 2
+        const retryable_handler = await make_retryable( handle_route, { retry_times, cooldown_in_s: 2, cooldown_entropy: true } )
         await retryable_handler()
 
     } catch ( error ) {

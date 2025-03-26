@@ -1,0 +1,122 @@
+services:
+  miner:
+    container_name: miner
+    restart: unless-stopped
+    # image: taofuprotocol/tpn-subnet-miner:latest
+    build:
+      context: ./miner
+      dockerfile: Dockerfile.miner
+    env_file:
+      - ./miner/.env
+    ports:
+        - "3001:3001"
+    volumes:
+      - ./wireguard:/app/wireguard
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      wireguard:
+        condition: service_healthy
+    environment:
+        - LOG_LEVEL=info
+        # - POSTGRES_PASSWORD
+        # - POSTGRES_HOST
+        # - POSTGRES_USER
+        - CI_MODE=true
+    networks:
+      - tpn_network
+
+  wireguard:
+    # image: lscr.io/linuxserver/wireguard:latest
+    build:
+      context: ./miner
+      dockerfile: Dockerfile.wireguard
+    env_file:
+      - ./miner/.env
+    container_name: wireguard
+    stop_grace_period: 2s
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - SERVERPORT=51820
+      - PEERS=${WIREGUARD_PEER_COUNT:-250}
+      - LOG_CONFS=false
+    volumes:
+      - ./wireguard:/config
+    ports:
+      - 51820:51820/udp
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
+    networks:
+      - tpn_network
+
+  validator:
+    container_name: validator
+    # image: taofuprotocol/tpn-subnet-validator:latest
+    build:
+      context: ./validator
+      dockerfile: Dockerfile
+    env_file:
+      - ./validator/.env
+    # Environment variables will be picked from .env unless overridden here
+    environment:
+      - LOG_LEVEL=info
+      # - PUBLIC_VALIDATOR_URL
+      # - MAXMIND_LICENSE_KEY
+      # - IP2LOCATION_DOWNLOAD_TOKEN
+      # - POSTGRES_PASSWORD
+      - CI_MODE=true
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun
+    security_opt:
+      - seccomp:unconfined
+    privileged: true  # Optional, but ensures all capabilities are available
+    stdin_open: true
+    tty: true
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - maxmind_data:/app/node_modules/geoip-lite/data
+      - ip2location_data:/app/ip2location_data
+    networks:
+      - tpn_network
+
+  postgres:
+    container_name: postgres
+    image: postgres
+    environment:
+      - POSTGRES_PASSWORD
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    shm_size: 128mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - tpn_network
+
+volumes:
+  maxmind_data:
+  ip2location_data:
+  postgres_data:
+
+networks:
+  tpn_network:
+    driver: bridge

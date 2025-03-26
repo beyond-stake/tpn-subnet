@@ -1,8 +1,9 @@
 import { wait_for_server_up } from "./helpers"
 import { describe, test, expect } from 'vitest'
 import fetch from 'node-fetch'
-
+import 'dotenv/config'
 const { CI_MODE } = process.env
+if( !CI_MODE ) console.log( '🚨 CI_MODE is not set, it really should be' )
 
 describe( 'Wireguard endpoint', () => {
 
@@ -14,7 +15,7 @@ describe( 'Wireguard endpoint', () => {
         console.log( 'Server is up' )
 
         // Can retreive new wireguard config
-        const lease_min = CI_MODE ? .1 : 5
+        const lease_min = CI_MODE ? .5 : 5
         const response = await fetch( `http://localhost:3001/wireguard/new?geo=any&lease_minutes=${ lease_min }` ).then( r => r.json() )
         console.log( 'Response: ', response )
 
@@ -34,9 +35,9 @@ describe( 'Wireguard endpoint', () => {
         const exhausted_responses = await Promise.all( requests )
 
         // Log the statuses of the exhausted_responses
-        // const statuses = exhausted_responses.map( r => r.status )
-        // const responses = await Promise.all( exhausted_responses.map( r => r.json() ) )
-        // console.log( 'Statuses: ', statuses, responses )
+        const statuses = exhausted_responses.map( r => r.status )
+        const responses = await Promise.all( exhausted_responses.map( r => r.json() ) )
+        console.log( 'Statuses: ', statuses, responses )
 
         // Expect a status 500 with { error: 'Internal server error' }
         const attempt = await fetch( 'http://localhost:3001/wireguard/new?geo=any&lease_minutes=.1' )
