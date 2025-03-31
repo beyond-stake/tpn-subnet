@@ -15,9 +15,9 @@ let base_url = PUBLIC_VALIDATOR_URL || PUBLIC_URL
 base_url = `${ base_url }`.replace( /\/$/, '' )
 
 // Check if public url has a port
-const has_port = `${ base_url }`.match( /:\d*$/ )
+const has_port = `${ base_url }`.match( /:\d+$/ )
 
-if( has_port && PUBLIC_PORT ) log.error( `You specified a PUBLIC_PORT=${ PUBLIC_PORT } but your base url ${ PUBLIC_VALIDATOR_URL } also has a port specified, this will break!` )
+if( has_port && PUBLIC_PORT ) log.error( `You specified a PUBLIC_PORT=${ PUBLIC_PORT } but your base url ${ base_url } also has a port specified, this will break!` )
 
 if( PUBLIC_PORT && !base_url.includes( `:${ PUBLIC_PORT }` ) ) {
     log.info( `Adding port ${ PUBLIC_PORT } to base url` )

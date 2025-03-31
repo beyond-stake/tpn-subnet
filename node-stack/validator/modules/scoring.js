@@ -58,6 +58,7 @@ export async function score_request_uniqueness( request, disable_rate_limit=fals
         is_data_center( unspoofable_ip ),
         save_ip_address_and_return_ip_stats( { ip_address: unspoofable_ip, country } )
     ] )
+    log.info( `Call stats: `, { is_dc, ip_pct_same_country } )
     
     // Calcluate the score of the request, datacenters get half scores
     const datacenter_penalty = 0.9

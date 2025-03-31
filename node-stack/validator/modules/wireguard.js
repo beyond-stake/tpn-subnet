@@ -31,7 +31,7 @@ export async function validate_wireguard_config( { peer_config, peer_id } ) {
     // }
 
     // Run specific variables
-    const interface_id = `tpn${ peer_id }${ random_string_of_length( 10 ) }`
+    const interface_id = `tpn${ peer_id }${ random_string_of_length( 9 ) }`
     const routing_table = random_number_between( 255, 2**32 - 1 ) // Up to 255 is used by the system
     const config_path = `/tmp/${ interface_id }.conf`
 
