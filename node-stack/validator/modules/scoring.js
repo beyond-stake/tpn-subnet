@@ -1,6 +1,7 @@
-import { log } from 'mentie'
+import { cache, log } from 'mentie'
 import { save_ip_address_and_return_ip_stats } from './database.js'
 import { is_data_center } from './ip2location.js'
+const { CI_MODE } = process.env
 
 /**
  * Scores the uniqueness of a request based on its IP address.
@@ -30,8 +31,26 @@ export async function score_request_uniqueness( request ) {
 
     // Get the geolocation of this ip
     const { default: geoip } = await import( 'geoip-lite' )
-    const { country='unknown' } = geoip.lookup( unspoofable_ip ) || {}
+    const { country } = geoip.lookup( unspoofable_ip ) || {}
     log.info( `Request from:`, country )
+
+    // If country was undefined, exit with undefined score
+    if( !country && !CI_MODE ) {
+        log.info( `Cannot determine country of request` )
+        return undefined
+    }
+
+    // Check if the last time this ip was seen was within 20 minutes, if it was score as 0 as it indicates multiple miners at the same ip
+    const last_seen = cache( `last_seen_${ unspoofable_ip }` )
+    const cooldown_minutes = 20 - 1 // Weightset time minus 1 minute grace window
+    const minutes_since_seen = ( Date.now() - last_seen ) / 1000 / 60
+    if( last_seen && minutes_since_seen < cooldown_minutes ) {
+        log.info( `Request from ${ unspoofable_ip } seen ${ minutes_since_seen } minutes ago, scoring as 0` )
+        return 0
+    }
+
+    // Save last seen ip to cache
+    cache( `last_seen_${ unspoofable_ip }`, Date.now(), cooldown_minutes * 2 * 60 * 1000 )
     
     // Get the connection type and save ip to db
     const [ is_dc, { ip_pct_same_country=0 } ] = await Promise.all( [
@@ -43,9 +62,13 @@ export async function score_request_uniqueness( request ) {
     const country_uniqueness_score = ( 100 - ip_pct_same_country ) * ( is_dc ? 0.5 : 1 )
     log.info( `Country uniqueness: ${ country_uniqueness_score }` )
 
+    // Curve score with a power function where 100 stays 100, but lower numbers get more extreme
+    const curve = 5
+    const powered_score = Math.pow( country_uniqueness_score / 100, curve ) * 100
+    log.info( `Powered score: ${ powered_score }` )
 
     // Return the score of the request
-    return country_uniqueness_score
+    return powered_score
 
 }
 // Datacenter name patterns (including educated guesses)

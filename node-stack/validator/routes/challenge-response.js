@@ -6,6 +6,7 @@ import { cache, log, make_retryable } from "mentie"
 import { base_url } from "../modules/url.js"
 import { validate_wireguard_config } from "../modules/wireguard.js"
 export const router = Router()
+const { CI_MODE } = process.env
 
 // Generate challenge route
 router.get( "/new", async ( req, res ) => {
@@ -70,16 +71,20 @@ router.get( "/:challenge/:response?", async ( req, res ) => {
 
         // If correct, score the request
         const uniqueness_score = await score_request_uniqueness( req )
-        if( uniqueness_score === undefined ) return res.status( 500 ).json( { error: 'Nice try' } )
+        log.info( `Uniqueness score for ${ challenge }: ${ uniqueness_score }` )
+        if( uniqueness_score === undefined && !CI_MODE ) {
+            log.info( `Uniqueness score is undefined, returning 500` )
+            return res.status( 500 ).json( { error: 'Nice try', score: 0, correct: false } )
+        }
 
         // Score based on delay, with a grace period, and a punishment per ms above it
         log.info( `Time to solve ${ challenge }: ${ ms_to_solve } (${ solved_at })` )
         const s_to_solve = ms_to_solve / 1000
         const penalty = Math.min( 100, 2 ** s_to_solve - 1 )
-        const speed_score = 100 - penalty
+        const speed_score = Math.sqrt( 100 - penalty )
 
-        // Composite score, average of uniqueness and speed
-        const score = Math.round( ( uniqueness_score + speed_score ) / 2 )
+        // Uniqeness score, minus maximum speed score, plus speed score
+        const score = Math.round( uniqueness_score - 10 + speed_score )
 
         // Formulate and cache response
         const data = { correct, score, speed_score, uniqueness_score, solved_at }
