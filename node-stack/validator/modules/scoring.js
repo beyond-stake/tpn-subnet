@@ -12,9 +12,9 @@ const { CI_MODE } = process.env
  * @param {Object} request.connection - The connection object of the request.
  * @param {Object} request.socket - The socket object of the request.
  * @param {Function} request.get - Function to get headers from the request.
- * @returns {Promise<number>} - The uniqueness score [0-100] of the request based on the country of the IP address.
+ * @returns {Promise<Object|undefined>} - Returns an object containing the uniqueness score and country uniqueness score if successful, otherwise undefined.
  */
-export async function score_request_uniqueness( request ) {
+export async function score_request_uniqueness( request, disable_rate_limit=false ) {
 
     // Get the ip of the originating request
     let { ip: request_ip, ips, connection, socket } = request
@@ -26,7 +26,7 @@ export async function score_request_uniqueness( request ) {
     if( !unspoofable_ip ) {
         log.info( `Cannot determine ip address of request, but it might be coming from ${ spoofable_ip } based on headers alone` )
         // return undefined so the calling parent knows there is an issue
-        return undefined
+        return { uniqueness_score: undefined }
     }
 
     // Get the geolocation of this ip
@@ -37,7 +37,7 @@ export async function score_request_uniqueness( request ) {
     // If country was undefined, exit with undefined score
     if( !country && !CI_MODE ) {
         log.info( `Cannot determine country of request` )
-        return undefined
+        return { uniqueness_score: undefined }
     }
 
     // Check if the last time this ip was seen was within 20 minutes, if it was score as 0 as it indicates multiple miners at the same ip
@@ -45,9 +45,9 @@ export async function score_request_uniqueness( request ) {
     const grace_minutes = 11
     const cooldown_minutes = 20 - grace_minutes // Weightset time minus grace window
     const minutes_since_seen = ( Date.now() - last_seen ) / 1000 / 60
-    if( last_seen && minutes_since_seen < cooldown_minutes ) {
+    if( !disable_rate_limit && last_seen && minutes_since_seen < cooldown_minutes ) {
         log.info( `Request from ${ unspoofable_ip } seen ${ minutes_since_seen } minutes ago, scoring as 0` )
-        return 0
+        return { uniqueness_score: 0 }
     }
 
     // Save last seen ip to cache
@@ -60,7 +60,8 @@ export async function score_request_uniqueness( request ) {
     ] )
     
     // Calcluate the score of the request, datacenters get half scores
-    const country_uniqueness_score = ( 100 - ip_pct_same_country ) * ( is_dc ? 0.5 : 1 )
+    const datacenter_penalty = 0.9
+    const country_uniqueness_score = ( 100 - ip_pct_same_country ) * ( is_dc ? datacenter_penalty : 1 )
     log.info( `Country uniqueness: ${ country_uniqueness_score }` )
 
     // Curve score with a power function where 100 stays 100, but lower numbers get more extreme
@@ -69,7 +70,7 @@ export async function score_request_uniqueness( request ) {
     log.info( `Powered score: ${ powered_score }` )
 
     // Return the score of the request
-    return powered_score
+    return { uniqueness_score: powered_score, country_uniqueness_score }
 
 }
 // Datacenter name patterns (including educated guesses)

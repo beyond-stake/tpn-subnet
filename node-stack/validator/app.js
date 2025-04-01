@@ -3,7 +3,10 @@ import 'dotenv/config'
 const { CI_MODE } = process.env
 import { log } from 'mentie'
 const update_interval_ms = 1000 * 60 * 60 * 24 // 24 hours
-log.info( 'Starting Sybil Network validator component with env', process.env )
+import { readFile } from 'fs/promises'
+const { version } = JSON.parse( await readFile( new URL( './package.json', import.meta.url ) ) )
+log.info( `Starting Sybil Network validator component version ${ version }` )
+
 
 // Initialize the database
 import { init_tables } from './modules/database.js'
@@ -30,7 +33,7 @@ import { app } from './routes/server.js'
 
 // Root route responds with identity
 app.get( '/', ( req, res ) => {
-    res.send( "I am a TPN Network validator component" )
+    res.send( `I am a TPN Network validator component running v${ version }` )
 } )
 
 // Import and add scoring routes. This is a debugging route that is not actually used by the neurons

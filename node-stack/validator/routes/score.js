@@ -9,7 +9,7 @@ router.get( "/", async ( req, res ) => {
 
     try {
 
-        const score = await score_request_uniqueness( req )
+        const score = await score_request_uniqueness( req, true )
 
         return res.json( { score } )
         

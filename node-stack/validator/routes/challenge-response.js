@@ -70,7 +70,7 @@ router.get( "/:challenge/:response?", async ( req, res ) => {
         if( !correct ) return res.json( { correct } )
 
         // If correct, score the request
-        const uniqueness_score = await score_request_uniqueness( req )
+        const { uniqueness_score, country_uniqueness_score } = await score_request_uniqueness( req )
         log.info( `Uniqueness score for ${ challenge }: ${ uniqueness_score }` )
         if( uniqueness_score === undefined && !CI_MODE ) {
             log.info( `Uniqueness score is undefined, returning 500` )
@@ -84,10 +84,11 @@ router.get( "/:challenge/:response?", async ( req, res ) => {
         const speed_score = Math.sqrt( 100 - penalty )
 
         // Uniqeness score, minus maximum speed score, plus speed score
-        const score = Math.round( uniqueness_score - 10 + speed_score )
+        const score = Math.max( Math.round( uniqueness_score - 10 + speed_score ), 0 )
+        
 
         // Formulate and cache response
-        const data = { correct, score, speed_score, uniqueness_score, solved_at }
+        const data = { correct, score, speed_score, uniqueness_score, country_uniqueness_score,  solved_at }
         cache( `solution_score_${ challenge }`, data )
 
         return res.json( data )
