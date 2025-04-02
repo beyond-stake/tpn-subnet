@@ -1,8 +1,8 @@
 services:
   validator:
     container_name: tpn_validator
-    image: taofuprotocol/tpn-subnet-validator:latest
-    # Suggested command: docker compose -f validator.docker-compose.yml build --build-arg CACHEBUST=$(date +%s) && docker compose -f validator.docker-compose.yml up; docker compose -f validator.docker-compose.yml down -v
+    # image: taofuprotocol/tpn-subnet-validator:latest
+    # Suggested dev command: docker compose -f validator.docker-compose.yml build --build-arg CACHEBUST=$(date +%s) && docker compose -f validator.docker-compose.yml up; docker compose -f validator.docker-compose.yml down -v
     build:
       context: .
       dockerfile: Dockerfile
