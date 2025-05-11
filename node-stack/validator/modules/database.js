@@ -80,6 +80,15 @@ export async function init_tables() {
         )
     ` )
 
+    // Create payment events table
+    await pool.query( `
+        CREATE TABLE IF NOT EXISTS payment_events (
+            account_hash TEXT,
+            account_password TEXT,
+            used BOOLEAN
+        )
+    ` )
+
     /* //////////////////////
     // Backwards iompatibility
     ////////////////////// */
@@ -256,3 +265,27 @@ export async function get_challenge_response_score( { challenge } ) {
 
 }
 
+export async function save_account_hash( { account_hash, account_password, used=true } ) {
+
+    // Save the account hash and password
+    log.info( 'Saving account hash:', { account_hash, used } )
+    await pool.query(
+        `INSERT INTO payment_events (account_hash, account_password, used) VALUES ($1, $2, $3)`,
+        [ account_hash, account_password, used ]
+    )
+    log.info( 'Account hash saved:', { account_hash, used } )
+    return { account_hash, used }
+
+}
+
+export async function get_account_hash( { account_hash } ) {
+    
+    // Retrieve the account hash
+    log.info( 'Querying for account hash:', { account_hash } )
+    const result = await pool.query(
+        `SELECT account_hash, account_password, used FROM payment_events WHERE account_hash = $1 LIMIT 1`,
+        [ account_hash ]
+    )
+    log.info( 'Query result:', result.rows )
+    return result.rows[0]
+}

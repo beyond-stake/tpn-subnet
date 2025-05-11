@@ -1,8 +1,10 @@
 import { Router } from "express"
 export const router = Router()
-import { cache, log, require_props } from "mentie"
-import fetch from "node-fetch"
-import { get_ips_by_country, get_miner_stats } from "../modules/stats.js"
+import { cache, hash, log } from "mentie"
+import { get_miner_stats } from "../modules/stats.js"
+import { get_config_from_miners } from "../modules/miner_api.js"
+import { get_all_payment_events, get_emv_public_client } from "../modules/evm.js"
+import { get_account_hash, save_account_hash } from "../modules/database.js"
 
 router.get( "/config/countries", async ( req, res ) => {
 
@@ -34,94 +36,91 @@ router.get( '/config/new', async ( req, res ) => {
 
         // Get request parameters
         let { geo, lease_minutes, format='json', timeout_ms=5_000 } = req.query
-        log.info( `Request received for new config:`, { geo, lease_minutes } )
+        const { error, ...config } = await get_config_from_miners( { geo, lease_minutes, format, timeout_ms } )
 
-        // Validate request parameters
-        const required_properties = [ 'geo', 'lease_minutes' ]
-        require_props( req.query, required_properties )
-        log.info( `Request properties validated` )
-
-        // Validate lease
-        const lease_min = .5
-        const lease_max = 60
-        if( lease_minutes < lease_min || lease_minutes > lease_max ) {
-            throw new Error( `Lease must be between ${ lease_min } and ${ lease_max } minutes, you supplied ${ lease_minutes }` )
-        }
-
-        // If geo was set to 'any', set it to null
-        if( geo == 'any' ) geo = null
-
-        // Dummy response
-        const live = true
-        if( !live ) {
-            return res.json( { error: 'Endpoint not yet enabled, it will be soon', your_inputs: { geo, lease_minutes } } )
-        }
-
-        // Get the miner ips for this country code
-        const ips = await get_ips_by_country( { geo } )
-        log.info( `Got ${ ips.length } ips for country:`, geo )
-
-        // If there are no ips, return an error
-        if( ips.length == 0 ) return res.status( 404 ).json( { error: `No ips found for country: ${ geo }` } )
-
-        // Request configs from these miners until one succeeds
-        let config = null
-        for( let ip of ips ) {
-
-            log.info( `Requesting config from miner:`, ip )
-
-            // Sanetise potential ipv6 mapping of ipv4 address
-            if( ip?.trim()?.startsWith( '::ffff:' ) ) ip = ip?.replace( '::ffff:', '' )
-
-
-            // Create the config url
-            let config_url = new URL( `http://${ ip }:3001/wireguard/new` )
-            config_url.searchParams.set( 'lease_minutes', lease_minutes )
-            config_url.searchParams.set( 'geo', geo )
-            config_url = config_url.toString()
-            log.info( `Requesting config from:`, config_url )
-
-            // Response holder for trycatch management
-            let response = undefined
-
-            try {
-
-                // Request with timeout
-                const controller = new AbortController()
-                const timeout_id = setTimeout( () => {
-                    controller.abort()
-                }, timeout_ms )
-                response = await fetch( config_url, { signal: controller.signal } )
-                clearTimeout( timeout_id )
-
-                const json = await response.clone().json()
-                log.info( `Response from ${ ip }:`, json )
-
-                // Get relevant properties
-                const { peer_config, expires_at } = json
-                if( peer_config && expires_at ) config = { peer_config, expires_at }
-
-                // If we have a config, exit the for loop
-                if( config ) break
-
-            } catch ( e ) {
-
-                const text_response = await response?.clone()?.text()?.catch( e => e.message )
-                log.info( `Error requesting config from ${ ip }: ${ e.message }. Response body:`, text_response )
-                continue
-
-            }
-
-
+        // If there was an error, return to user
+        if( error ) {
+            log.info( `Error requesting config:`, error )
+            return res.status( 400 ).json( { error } )
         }
 
         // If no config was found, return an error 
-        if( !config ) return res.status( 404 ).json( { error: `No config found for country: ${ geo } (${ ips.length } miners)` } )
+        if( !config ) return res.status( 404 ).json( { error: `No config found for country: ${ geo }` } )
         log.info( `Config found for ${ geo }:`, config )
 
         // Return the config to the requester
         if( format == 'json' ) return res.json( { ...config } )
         return res.send( config.peer_config )
+
+
+    } catch ( e ) {
+
+        log.info( `Error requesting config:`, e.message )
+        return res.status( 400 ).json( { error: e.message } )
+
+    }
+
+} )
+
+router.get( '/config/new_with_payment', async ( req, res ) => {
+
+    try {
+
+        // Get the request parameters
+        const { geo, lease_minutes, format='json', timeout_ms=5_000, account_hash, account_password } = req.query
+
+        // Verify that the password matches the hash
+        const hash_match = hash( account_password ) == account_hash
+        if( !hash_match ) {
+            log.info( `Password hash does not match` )
+            return res.status( 400 ).json( { error: `Password hash does not match` } )
+        }
+
+        // Check that the provided hash has an even associated with it on chain
+        const payment_events = await get_all_payment_events()
+        const payment_event = payment_events.find( event => event.args.account_hash == account_hash )
+        if( !payment_event ) {
+            log.info( `No payment event found for hash:`, account_hash )
+            return res.status( 400 ).json( { error: `No payment event found for hash: ${ account_hash }` } )
+        }
+
+        // Check the local database to see if we used this payment already
+        const account_data = await get_account_hash( { account_hash } )
+        if( account_data.used ) {
+            log.info( `Account hash already used:`, account_hash )
+            return res.status( 400 ).json( { error: `Account hash already used: ${ account_hash }` } )
+        }
+
+        // Validate that they payment data matches our requirements
+        const { blockNumber, args } = payment_event
+        const { netuid, uid, hotkey, payload, paid } = args // where netuid is subnet uid, uid is validator uid, hotkey is validator hotkey, payload can be any string, paid is the amount of TAO paid
+        const client = get_emv_public_client()
+        const block = await client.getBlock( { blockNumber } )
+        const block_time_ms = 12_000
+        const event_age = ( Date.now() - block.timestamp * 1000 ) / block_time_ms
+        const event_maxage = 60 * 60 * 72
+        if( event_age > event_maxage ) {
+            log.info( `Payment event is too old:`, event_age )
+            return res.status( 400 ).json( { error: `Payment event is too old: ${ event_age }` } )
+        }
+
+        // Get the config from the miners
+        const { error, ...config } = await get_config_from_miners( { geo, lease_minutes, format, timeout_ms } )
+
+        // If there was an error, return to user
+        if( error ) {
+            log.info( `Error requesting config:`, error )
+            return res.status( 400 ).json( { error } )
+        }
+
+        // Mark the account hash as used
+        await save_account_hash( { account_hash, used: true } )
+        log.info( `Account hash marked as used:`, account_hash )
+
+        // Return the config to the user
+        if( format == 'json' ) return res.json( { ...config } )
+        return res.send( config.peer_config )
+
 
 
     } catch ( e ) {
